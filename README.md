@@ -6,4 +6,4 @@ Purpose of this was to explore:
 
 You can explore (be gentle: everything I'm linking to is on free tier 🙏🏻😇) at https://benjamintseng--metasearch.modal.run/
 
-A blog post explaining the process & more of takeaways coming soon
+For more on the design/architecture choices, read more at https://benjamintseng.com/portfolio/building-an-ai-powered-metasearch-concept/ 
