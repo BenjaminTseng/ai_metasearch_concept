@@ -12,7 +12,7 @@ def openai_chain_search(query: str):
     import openai 
     import os 
     import re
-    model = 'gpt-3.5-turbo' # using GPT 4 model
+    model = 'gpt-3.5-turbo' # using GPT 3.5 turbo model
 
     # Pull Open AI secrets
     openai.organization = os.environ['OPENAI_ORG_ID']
@@ -24,10 +24,11 @@ def openai_chain_search(query: str):
 Your first step is to determine what sort of content and resources would be most valuable. For topics such as "wedding dresses" and "beautiful homes" and "brutalist architecture", I am likely to want more visual image content as these topics are design oriented and people tend to want images to understand or derive inspiration. For topics, such as "home repair" and "history of Scotland" and "how to start a business", I am likely to want more text and link content as these topics are task-oriented and people tend to want authoritative information or answers to questions."""
     initial_prompt_template = 'I am interested in the topic:\n{topic}\n\nAm I more interested in visual content or text and link based content? Select the best answer between the available options, even if it is ambiguous. Start by stating the answer to the question plainly. Do not provide the links or resources. That will be addressed in a subsequent question.'
     text_template = 'You have access to three search engines.\n\nThe first will directly query Wikipedia. The second will surface interesting posts on Reddit based on keyword matching with the post title and text. The third will surface podcast episodes based on keyword matching.\n\nQueries to Wikipedia should be fairly direct so as to maximize the likelihood that something relevant will be returned. Queries to the Reddit and podcast search engines should be specific and go beyond what is obvious and overly broad to surface the most interesting posts and podcasts.\n\nWhat are 2 queries that will yield the most interesting Wikipedia posts, 3 queries that will yield the most valuable Reddit posts, and 3 queries surface that will yield the most insightful and valuable podcast episodes about:\n{topic}\n\nProvide the queries in a numbered list with quotations around the entire query and brackets around which search engine they\'re intended for (for example: 1. [Reddit] "Taylor Swift relationships". 2. [Podcast] "Impact of Taylor Swift on Music". 3. [Wikipedia] "Taylor Swift albums").'
-    image_template = 'You have access to two search engines.\n\nThe first a set of high quality images mapped to a vector database. There are only about 30,000 images in the dataset so it is unlikely that it can return highly specific image results so it would be better to use more generic queries and explore a broader range of relevant iamges.\n\nThe second will directly query the free stock photo site Unsplash. There will be a good breadth of photos but the key will be trying to find the highest quality images.\n\nWhat are 3 great queries to use that will provide good visual inspiration and be different enough from one another so as to provide a broad range of relevant images from the vector database and 3 great queries to use with Unsplash to get the highest quality images on the topic of:\n{topic}\n\nProvide the queries in a numbered list with quotations around the entire query and brackets around which search engine they\'re intended for (for example: 1. [Vector] "Mountain sunset". 2. [Unsplash] "High quality capture of mountain top at sunset".)'
+    image_template = 'You have access to two search engines.\n\nThe first a set of high quality images mapped to a vector database. There are only about 30,000 images in the dataset so it is unlikely that it can return highly specific image results so it would be better to use more generic queries and explore a broader range of relevant images.\n\nThe second will directly query the free stock photo site Unsplash. There will be a good breadth of photos but the key will be trying to find the highest quality images.\n\nWhat are 3 great queries to use that will provide good visual inspiration and be different enough from one another so as to provide a broad range of relevant images from the vector database and 3 great queries to use with Unsplash to get the highest quality images on the topic of:\n{topic}\n\nProvide the queries in a numbered list with quotations around the entire query and brackets around which search engine they\'re intended for (for example: 1. [Vector] "Mountain sunset". 2. [Unsplash] "High quality capture of mountain top at sunset".)'
 
     # create context to send to OpenAI
     messages = []
+    # add system message
     if 'gpt-4' not in model: # only gpt-4 and beyond have 'system' message
         messages.append({
             'role': 'user',
@@ -39,6 +40,7 @@ Your first step is to determine what sort of content and resources would be most
             'content': system_message
         })
 
+    # add initial prompt
     messages.append({
         'role': 'user',
         'content': initial_prompt_template.format(topic=query)
@@ -56,33 +58,29 @@ Your first step is to determine what sort of content and resources would be most
     })
 
     # chain decision: decide based on response what to do
-    responses = []
+    responses = [] # aggregate list of actions to take
     if 'text and link' in response['choices'][0]['message']['content']:
         # get good wikipedia, reddit, and podcast queries
         messages.append({
             'role': 'user',
             'content': text_template.format(topic=query)
         })
-        response = openai.ChatCompletion.create(
-            model=model,
-            messages = messages,
-            temperature = 1.0
-        )
     else:
-        # Wikipedia one-shot the query
+        # Wikipedia one-shot the query to add some additional text-based context
         responses.append('Wikipedia: ' + query)
         
         # get good image search queries
-        messages = messages[:-1] # remove last query to reduce context load
         messages.append({
             'role': 'user',
             'content': image_template.format(topic=query)
         })
-        response = openai.ChatCompletion.create(
-            model=model,
-            messages = messages,
-            temperature = 1.0
-        )
+
+    # make followup call to OpenAI
+    response = openai.ChatCompletion.create(
+        model=model,
+        messages = messages,
+        temperature = 1.0
+    )
     
     # use regex to parse GPT's recommended queries
     for engine, query in re.findall(r'[0-9]+. \[(\w+)\] "(.*)"', 
@@ -96,7 +94,7 @@ Your first step is to determine what sort of content and resources would be most
 def search_wikipedia(query: str):
     import requests
     import urllib.parse
-    from bs4 import BeautifulSoup, element
+    from bs4 import BeautifulSoup
 
     # base_search_url works pretty well if search string is spot-on, if not shows search results
     base_search_url = 'http://www.wikipedia.org/search-redirect.php?search={query}&language=en&go=Go'
@@ -356,7 +354,7 @@ def search_unsplash(query: str, num_matches: int = 5):
             
         return results
     else:
-        return [{'error':'auth token failure'}]
+        return [{'error':'auth failure'}]
 
 # function to map against response list
 @stub.function()
@@ -378,6 +376,8 @@ def parse_response(response: str):
 @stub.function()
 @web_endpoint(label='metasearch')
 def web_search(query: str = None):
+    import random 
+
     html_string = "<html>"
     css_string = "<style type='text/css'>\n .row {display: flex; flex-flow: row wrap}\n .rowchild {border: 1px solid #555555; border-radius: 10px; padding: 10px; max-width: 45%; min-width: 300px; margin: 10px;}\n .linkhead {font-size: larger}\n .actualquery {font-size: smaller}\n .snippet {margin: 10px auto; padding: 0px 15px; font-style: italic}\n .imagecontainer {max-width: 90%; max-height: 400px}\n .imagecontainer img {max-width: 100%; max-height: 400px; margin: auto;}\n .imagecontainer img.podcast {max-width: 200px; max-height: 200px;} </style>"
     results = []
@@ -396,6 +396,9 @@ def web_search(query: str = None):
         for result_array in results:
             if result_array:
                 flattened_results += result_array
+
+        # shuffle results to add some randomness
+        random.shuffle(flattened_results)
 
         # iterate through search results and build results page
         row_start = True 

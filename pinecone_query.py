@@ -45,8 +45,7 @@ class TextEmbeddingModel:
         # run the resulting vector through Pinecone
         pinecone_results = self.pinecone_index.query(vector=vector.tolist(), 
                                    top_k=num_matches, 
-                                   include_metadata=True, 
-                                   filter={'source':'Savee'}
+                                   include_metadata=True
                                    )
         
         # convert to format expected
