@@ -97,14 +97,14 @@ def search_wikipedia(query: str):
     from bs4 import BeautifulSoup
 
     # base_search_url works pretty well if search string is spot-on, if not shows search results
-    base_search_url = 'http://www.wikipedia.org/search-redirect.php?search={query}&language=en&go=Go'
+    base_search_url = 'https://en.wikipedia.org/w/index.php?title=Special:Search&search={query}'
     base_url = 'https://en.wikipedia.org'
 
     results = []
     r = requests.get(base_search_url.format(query = urllib.parse.quote(query)))
     soup = BeautifulSoup(r.content, 'html.parser')
 
-    if '/wiki/Special:Search' in r.url: # no match, so its a search, get top two results
+    if 'title=Special:Search' in r.url: # no match, so its a search, get top two results
         search_results = soup.find_all('li', class_='mw-search-result')
         for search_result in search_results[0:2]:
             result = {'query':query}
@@ -362,15 +362,15 @@ def parse_response(response: str):
     pinecone_query = Function.lookup('text-pinecone-query', 'TextEmbeddingModel.query')
 
     if response[0:11] == 'Wikipedia: ':
-        return search_wikipedia.call(response[11:])
+        return search_wikipedia.remote(response[11:])
     elif response[0:8] == 'Reddit: ':
-        return search_reddit.call(response[8:])
+        return search_reddit.remote(response[8:])
     elif response[0:9] == 'Podcast: ':
-        return search_podcasts.call(response[9:])
+        return search_podcasts.remote(response[9:])
     elif response[0:10] == 'Unsplash: ':
-        return search_unsplash.call(response[10:])
+        return search_unsplash.remote(response[10:])
     elif response[0:8] == 'Vector: ':
-        return pinecone_query.call(response[7:], 7)    
+        return pinecone_query.remote(response[7:], 7)    
 
 # web endpoint
 @stub.function()
@@ -390,7 +390,7 @@ def web_search(query: str = None):
         html_string += "<h1>Search: " + query + "</h1>"
 
         # run chain search and then process each search independently
-        responses = openai_chain_search.call(query)
+        responses = openai_chain_search.remote(query)
         results = parse_response.map(responses)
         flattened_results = []
         for result_array in results:
@@ -461,7 +461,7 @@ def main(query = 'Mountain sunset'):
     seen_urls = []
     seen_thumbnails = []
 
-    responses = openai_chain_search.call(query)
+    responses = openai_chain_search.remote(query)
     for response in responses:
         print(response)
     

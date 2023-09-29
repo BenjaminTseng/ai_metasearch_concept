@@ -76,7 +76,7 @@ class TextEmbeddingModel:
 def entry(prompt: str = "Mountain Sunset"):
     print('Prompt:', prompt)
     emb = TextEmbeddingModel()
-    results = emb.query.call(prompt)
+    results = emb.query.remote(prompt)
     for result in results:
         print('URL:', result['url'])
         print('Subsource:', result['subsource_url'])
