@@ -7,7 +7,7 @@ image = Image.debian_slim(python_version='3.10') \
 stub = Stub('chain-search', image=image)
 
 # use OpenAI to convert query into smaller queries
-@stub.function(secret=Secret.from_name('openai_secret'))
+@stub.function(secrets=[Secret.from_name('openai_secret')])
 def openai_chain_search(query: str):
     import openai 
     import os 
@@ -154,7 +154,7 @@ def search_wikipedia(query: str):
     return results
 
 # handle Reddit
-@stub.function(secret=Secret.from_name('reddit_secret'))
+@stub.function(secrets=[Secret.from_name('reddit_secret')])
 def search_reddit(query: str):
     import requests
     import base64 
@@ -232,7 +232,7 @@ def search_reddit(query: str):
     return results
 
 # handle Podcast Search via Taddy
-@stub.function(secret = Secret.from_name('taddy_secret'))
+@stub.function(secrets=[Secret.from_name('taddy_secret')])
 def search_podcasts(query: str):
     import os 
     import requests 
@@ -315,7 +315,7 @@ def search_podcasts(query: str):
     return results
 
 # handle Unsplash Search
-@stub.function(secret = Secret.from_name('unsplash_secret'))
+@stub.function(secrets=[Secret.from_name('unsplash_secret')])
 def search_unsplash(query: str, num_matches: int = 5):
     import os 
     import requests 

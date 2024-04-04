@@ -1,4 +1,4 @@
-from modal import Image, Stub, Secret, method
+from modal import Image, Stub, Secret, method, enter
 
 # define Image for embedding text queries and hitting Pinecone
 # use Modal initiation trick to preload model weights
@@ -23,9 +23,10 @@ image = (
 stub = Stub('text-pinecone-query', image=image)
 
 # use Modal's class entry trick to speed up initiation
-@stub.cls(secret=Secret.from_name('pinecone_secret'))
+@stub.cls(secrets=[Secret.from_name('pinecone_secret')])
 class TextEmbeddingModel:
-    def __enter__(self):
+    @enter()
+    def enter(self):
         import sentence_transformers
         model = sentence_transformers.SentenceTransformer(cache_path, 
                                                           device='cpu')
