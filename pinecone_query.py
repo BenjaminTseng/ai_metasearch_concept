@@ -32,11 +32,10 @@ class TextEmbeddingModel:
                                                           device='cpu')
         self.model = model 
 
-        import pinecone
+        from pinecone import Pinecone
         import os 
-        pinecone.init(api_key=os.environ['PINECONE_API_KEY'], 
-                      environment=os.environ['PINECONE_ENVIRONMENT'])
-        self.pinecone_index = pinecone.Index(os.environ['PINECONE_INDEX'])
+        pc = Pinecone(api_key=os.environ['PINECONE_API_KEY'])
+        self.pinecone_index = pc.Index(os.environ['PINECONE_INDEX'])
     
     @method()
     def query(self, query: str, num_matches = 10):
