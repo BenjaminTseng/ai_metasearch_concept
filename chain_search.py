@@ -24,7 +24,7 @@ def openai_chain_search(query: str):
 Your first step is to determine what sort of content and resources would be most valuable. For topics such as "wedding dresses" and "beautiful homes" and "brutalist architecture", I am likely to want more visual image content as these topics are design oriented and people tend to want images to understand or derive inspiration. For topics, such as "home repair" and "history of Scotland" and "how to start a business", I am likely to want more text and link content as these topics are task-oriented and people tend to want authoritative information or answers to questions."""
     initial_prompt_template = 'I am interested in the topic:\n{topic}\n\nAm I more interested in visual content or text and link based content? Select the best answer between the available options, even if it is ambiguous. Start by stating the answer to the question plainly. Do not provide the links or resources. That will be addressed in a subsequent question.'
     text_template = 'You have access to three search engines.\n\nThe first will directly query Wikipedia. The second will surface interesting posts on Reddit based on keyword matching with the post title and text. The third will surface podcast episodes based on keyword matching.\n\nQueries to Wikipedia should be fairly direct so as to maximize the likelihood that something relevant will be returned. Queries to the Reddit and podcast search engines should be specific and go beyond what is obvious and overly broad to surface the most interesting posts and podcasts.\n\nWhat are 2 queries that will yield the most interesting Wikipedia posts, 3 queries that will yield the most valuable Reddit posts, and 3 queries surface that will yield the most insightful and valuable podcast episodes about:\n{topic}\n\nProvide the queries in a numbered list with quotations around the entire query and brackets around which search engine they\'re intended for (for example: 1. [Reddit] "Taylor Swift relationships". 2. [Podcast] "Impact of Taylor Swift on Music". 3. [Wikipedia] "Taylor Swift albums").'
-    image_template = 'You have access to two search engines.\n\nThe first a set of high quality images mapped to a vector database. There are only about 30,000 images in the dataset so it is unlikely that it can return highly specific image results so it would be better to use more generic queries and explore a broader range of relevant images.\n\nThe second will directly query the free stock photo site Unsplash. There will be a good breadth of photos but the key will be trying to find the highest quality images.\n\nWhat are 3 great queries to use that will provide good visual inspiration and be different enough from one another so as to provide a broad range of relevant images from the vector database and 3 great queries to use with Unsplash to get the highest quality images on the topic of:\n{topic}\n\nProvide the queries in a numbered list with quotations around the entire query and brackets around which search engine they\'re intended for (for example: 1. [Vector] "Mountain sunset". 2. [Unsplash] "High quality capture of mountain top at sunset".)'
+    image_template = 'You have access to a the free stock photo site Unsplash. There will be a good breadth of photos but the key will be trying to find the highest quality images.\n\nWhat are 3 great queries to use that will provide good visual inspiration and be different enough from one another so as to provide a broad range of relevant images from Unsplash to get the highest quality images on the topic of:\n{topic}\n\nProvide the queries in a numbered list with quotations around the entire query and "[Unsplash]" before the quotation to make it clear thats the intended search engine (for example: 1. [Unsplash] "Wildlife on a mountain top at sunset". 2. [Unsplash] "High quality capture of mountain top at sunset".)'
 
     # create context to send to OpenAI
     messages = []
@@ -316,7 +316,7 @@ def search_podcasts(query: str):
 
 # handle Unsplash Search
 @stub.function(secrets=[Secret.from_name('unsplash_secret')])
-def search_unsplash(query: str, num_matches: int = 5):
+def search_unsplash(query: str, num_matches: int = 10):
     import os 
     import requests 
 
@@ -359,8 +359,6 @@ def search_unsplash(query: str, num_matches: int = 5):
 # function to map against response list
 @stub.function()
 def parse_response(response: str):
-    pinecone_query = Function.lookup('text-pinecone-query', 'TextEmbeddingModel.query')
-
     if response[0:11] == 'Wikipedia: ':
         return search_wikipedia.remote(response[11:])
     elif response[0:8] == 'Reddit: ':
@@ -368,9 +366,7 @@ def parse_response(response: str):
     elif response[0:9] == 'Podcast: ':
         return search_podcasts.remote(response[9:])
     elif response[0:10] == 'Unsplash: ':
-        return search_unsplash.remote(response[10:])
-    elif response[0:8] == 'Vector: ':
-        return pinecone_query.remote(response[7:], 7)    
+        return search_unsplash.remote(response[10:])  
 
 # web endpoint
 @stub.function()
