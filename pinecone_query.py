@@ -1,4 +1,4 @@
-from modal import Image, Stub, Secret, method, enter
+from modal import Image, App, Secret, method, enter
 
 # define Image for embedding text queries and hitting Pinecone
 # use Modal initiation trick to preload model weights
@@ -20,10 +20,10 @@ image = (
     .run_function(download_models)
     .pip_install('pinecone-client')
 )
-stub = Stub('text-pinecone-query', image=image)
+app = App('text-pinecone-query', image=image)
 
 # use Modal's class entry trick to speed up initiation
-@stub.cls(secrets=[Secret.from_name('pinecone_secret')])
+@app.cls(secrets=[Secret.from_name('pinecone_secret')])
 class TextEmbeddingModel:
     @enter()
     def enter(self):
@@ -72,7 +72,7 @@ class TextEmbeddingModel:
         return results
 
 # local entrypoint to test
-@stub.local_entrypoint()
+@app.local_entrypoint()
 def entry(prompt: str = "Mountain Sunset"):
     print('Prompt:', prompt)
     emb = TextEmbeddingModel()

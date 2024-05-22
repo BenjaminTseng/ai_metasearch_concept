@@ -1,13 +1,13 @@
-from modal import Image, Stub, web_endpoint, Secret, Function
+from modal import Image, App, web_endpoint, Secret, Function
 from fastapi.responses import HTMLResponse
 
 # define Image for metasearch hitting web APIs
 image = Image.debian_slim(python_version='3.10') \
             .pip_install('openai', 'requests', 'beautifulsoup4')
-stub = Stub('chain-search', image=image)
+app = App('chain-search', image=image)
 
 # use OpenAI to convert query into smaller queries
-@stub.function(secrets=[Secret.from_name('openai_secret')])
+@app.function(secrets=[Secret.from_name('openai_secret')])
 def openai_chain_search(query: str):
     import openai 
     import os 
@@ -90,7 +90,7 @@ Your first step is to determine what sort of content and resources would be most
     return responses
 
 # handle Wikipedia
-@stub.function()
+@app.function()
 def search_wikipedia(query: str):
     import requests
     import urllib.parse
@@ -154,7 +154,7 @@ def search_wikipedia(query: str):
     return results
 
 # handle Reddit
-@stub.function(secrets=[Secret.from_name('reddit_secret')])
+@app.function(secrets=[Secret.from_name('reddit_secret')])
 def search_reddit(query: str):
     import requests
     import base64 
@@ -232,7 +232,7 @@ def search_reddit(query: str):
     return results
 
 # handle Podcast Search via Taddy
-@stub.function(secrets=[Secret.from_name('taddy_secret')])
+@app.function(secrets=[Secret.from_name('taddy_secret')])
 def search_podcasts(query: str):
     import os 
     import requests 
@@ -315,7 +315,7 @@ def search_podcasts(query: str):
     return results
 
 # handle Unsplash Search
-@stub.function(secrets=[Secret.from_name('unsplash_secret')])
+@app.function(secrets=[Secret.from_name('unsplash_secret')])
 def search_unsplash(query: str, num_matches: int = 10):
     import os 
     import requests 
@@ -357,7 +357,7 @@ def search_unsplash(query: str, num_matches: int = 10):
         return [{'error':'auth failure'}]
 
 # function to map against response list
-@stub.function()
+@app.function()
 def parse_response(response: str):
     if response[0:11] == 'Wikipedia: ':
         return search_wikipedia.remote(response[11:])
@@ -369,7 +369,7 @@ def parse_response(response: str):
         return search_unsplash.remote(response[10:])  
 
 # web endpoint
-@stub.function()
+@app.function()
 @web_endpoint(label='metasearch')
 def web_search(query: str = None):
     import random 
@@ -451,7 +451,7 @@ def web_search(query: str = None):
     return HTMLResponse(html_string)
 
 # local entrypoint to test
-@stub.local_entrypoint()
+@app.local_entrypoint()
 def main(query = 'Mountain sunset'):
     results = []
     seen_urls = []
