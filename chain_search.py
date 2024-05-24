@@ -108,7 +108,7 @@ def search_wikipedia(query: str):
         for search_result in search_results[0:2]:
             result = {'query':query}
             result['source'] = 'Wikipedia'
-            thumbnail_anchors = search_result.css.select("td.searchResultImage-thumbnail > a")
+            thumbnail_anchors = search_result.css.select("div.searchResultImage-thumbnail > a")
             if len(thumbnail_anchors): # thumbnail exists
                 result['thumbnail'] = 'https:' + thumbnail_anchors[0].find('img')['src']
             else:
@@ -116,7 +116,7 @@ def search_wikipedia(query: str):
             result_header_tag = search_result.css.select("div.mw-search-result-heading > a")[0]
             result['url'] = base_url + result_header_tag['href']
             result['title'] = result_header_tag.get_text()
-            result['snippet'] = search_result.css.select("td.searchResultImage-text > div.searchresult")[0].get_text()
+            result['snippet'] = search_result.css.select("div.searchResultImage-text > div.searchresult")[0].get_text()
             results.append(result)
     else:
         result = {'query':query}
