@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 
 # define Image for metasearch hitting web APIs
 image = Image.debian_slim(python_version='3.10') \
-            .pip_install('openai', 'requests', 'beautifulsoup4')
+            .pip_install('openai', 'httpx', 'beautifulsoup4')
 app = App('chain-search', image=image)
 
 # use OpenAI to convert query into smaller queries
@@ -15,8 +15,7 @@ def openai_chain_search(query: str):
     model = 'gpt-3.5-turbo' # using GPT 3.5 turbo model
 
     # Pull Open AI secrets
-    openai.organization = os.environ['OPENAI_ORG_ID']
-    openai.api_key = os.environ['OPENAI_API_KEY']
+    client = openai.OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
     # message templates with (some) prompt engineering
     system_message = """Act as my assistant who's job is to help me understand and derive inspiration around a topic I give you.  Your primary job is to help find the best images, content, and online resources for me. Assume I have entered a subject into a command line on a website and do not have the ability to provide you with follow-up context.
@@ -47,19 +46,19 @@ Your first step is to determine what sort of content and resources would be most
     })
 
     # get initial response
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=model,
         messages = messages,
         temperature = 1.0
     )
     messages.append({
         'role': 'assistant',
-        'content': response['choices'][0]['message']['content']
+        'content': response.choices[0].message.content
     })
 
     # chain decision: decide based on response what to do
     responses = [] # aggregate list of actions to take
-    if 'text and link' in response['choices'][0]['message']['content']:
+    if 'text and link' in response.choices[0].message.content.lower():
         # get good wikipedia, reddit, and podcast queries
         messages.append({
             'role': 'user',
@@ -76,7 +75,7 @@ Your first step is to determine what sort of content and resources would be most
         })
 
     # make followup call to OpenAI
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=model,
         messages = messages,
         temperature = 1.0
@@ -84,7 +83,7 @@ Your first step is to determine what sort of content and resources would be most
     
     # use regex to parse GPT's recommended queries
     for engine, query in re.findall(r'[0-9]+. \[(\w+)\] "(.*)"', 
-                                response['choices'][0]['message']['content']):
+                                response.choices[0].message.content):
         responses.append(engine + ': ' + query)
     
     return responses
@@ -92,7 +91,7 @@ Your first step is to determine what sort of content and resources would be most
 # handle Wikipedia
 @app.function()
 def search_wikipedia(query: str):
-    import requests
+    import httpx
     import urllib.parse
     from bs4 import BeautifulSoup
 
@@ -101,10 +100,10 @@ def search_wikipedia(query: str):
     base_url = 'https://en.wikipedia.org'
 
     results = []
-    r = requests.get(base_search_url.format(query = urllib.parse.quote(query)))
+    r = httpx.get(base_search_url.format(query = urllib.parse.quote(query)), follow_redirects=True)
     soup = BeautifulSoup(r.content, 'html.parser')
 
-    if 'title=Special:Search' in r.url: # no match, so its a search, get top two results
+    if 'title=Special:Search' in str(r.url): # no match, so its a search, get top two results
         search_results = soup.find_all('li', class_='mw-search-result')
         for search_result in search_results[0:2]:
             result = {'query':query}
@@ -114,7 +113,7 @@ def search_wikipedia(query: str):
                 result['thumbnail'] = 'https:' + thumbnail_anchors[0].find('img')['src']
             else:
                 result['thumbnail'] = 'None'
-            result_header_tag = search_result.css.select("td.searchResultImage-text > div.mw-search-result-heading > a")[0]
+            result_header_tag = search_result.css.select("div.mw-search-result-heading > a")[0]
             result['url'] = base_url + result_header_tag['href']
             result['title'] = result_header_tag.get_text()
             result['snippet'] = search_result.css.select("td.searchResultImage-text > div.searchresult")[0].get_text()
@@ -126,23 +125,17 @@ def search_wikipedia(query: str):
         result['title'] = soup.find('h1').get_text()
 
         # get the right paragraph to determine if this is a disambiguation article
-        first_paragraph = soup.css.select("div.mw-body-content > div.mw-parser-output > p:nth-of-type(1)")
-        second_paragraph = soup.css.select("div.mw-body-content > div.mw-parser-output > p:nth-of-type(2)")
-        if len(second_paragraph):
-            paragraph_text = second_paragraph[0].get_text().strip()
-        elif len(first_paragraph):
-            paragraph_text = first_paragraph[0].get_text().strip()
+        real_paragraphs = soup.find_all(lambda tag: tag.name == 'p' and 'class' not in tag.attrs and len(tag.get_text().split()) > 10)
+        if real_paragraphs:
+            paragraph_text = real_paragraphs[0].get_text().strip()
         else:
             paragraph_text = ''
 
-        if paragraph_text[-18:] == 'may also refer to:' or paragraph_text[-13:] == 'may refer to:': # is disambiguation article
+        if not len(paragraph_text) or paragraph_text[-18:] == 'may also refer to:' or paragraph_text[-13:] == 'may refer to:': # is disambiguation article or blank
             result['thumbnail'] = 'None'
-            if len(second_paragraph):
-                result['snippet'] = soup.css.select("div.mw-body-content > div.mw-parser-output > p:nth-of-type(1)")[0].get_text() + 'but there are several Wikipedia articles that could be relevant.'
-            else:
-                result['snippet'] = 'This page links to several Wikipedia articles that might be relevant.'
+            result['snippet'] = 'This page links to several Wikipedia articles that might be relevant.'
         else: # normal article
-            result['snippet'] = soup.css.select("div.mw-body-content > div.mw-parser-output > p:nth-of-type(1)")[0].get_text()
+            result['snippet'] = paragraph_text
             img_link = soup.find(lambda tag: tag.name == 'meta' and tag.has_attr('property') and tag.has_attr('content') and tag['property'] == 'og:image')
             if img_link: # an image exists
                 result['thumbnail'] = img_link['content']
@@ -156,7 +149,7 @@ def search_wikipedia(query: str):
 # handle Reddit
 @app.function(secrets=[Secret.from_name('reddit_secret')])
 def search_reddit(query: str):
-    import requests
+    import httpx
     import base64 
     import os 
 
@@ -176,7 +169,7 @@ def search_reddit(query: str):
     }
 
     # get auth token
-    r = requests.post('https://www.reddit.com/api/v1/access_token', headers = auth_headers, data = auth_data)
+    r = httpx.post('https://www.reddit.com/api/v1/access_token', headers = auth_headers, data = auth_data)
     if r.status_code == 200:
         if 'access_token' in r.json():
             reddit_access_token = r.json()['access_token']
@@ -198,7 +191,7 @@ def search_reddit(query: str):
         'limit': 4,
         'q': query[:512]
     }
-    r = requests.get('https://oauth.reddit.com/search', params=params, headers=headers)
+    r = httpx.get('https://oauth.reddit.com/search', params=params, headers=headers)
     if r.status_code == 200:
         body = r.json()
         if 'data' in body and 'children' in body['data'] and len(body['data']['children']) > 0:
@@ -235,7 +228,7 @@ def search_reddit(query: str):
 @app.function(secrets=[Secret.from_name('taddy_secret')])
 def search_podcasts(query: str):
     import os 
-    import requests 
+    import httpx 
 
     # prepare headers for querying taddy
     taddy_user_id = os.environ['TADDY_USER']
@@ -276,7 +269,7 @@ def search_podcasts(query: str):
 }
 """
     # make the graphQL request and parse the JSON body
-    r = requests.post(url, headers=headers, json={'query': queryString})
+    r = httpx.post(url, headers=headers, json={'query': queryString})
     if r.status_code != 200:
         return []
     else:
@@ -318,7 +311,7 @@ def search_podcasts(query: str):
 @app.function(secrets=[Secret.from_name('unsplash_secret')])
 def search_unsplash(query: str, num_matches: int = 10):
     import os 
-    import requests 
+    import httpx 
 
     # set up and make request
     unsplash_client = os.environ['UNSPLASH_ACCESS']
@@ -333,7 +326,7 @@ def search_unsplash(query: str, num_matches: int = 10):
         'per_page': num_matches,
         'query': query
     }
-    r = requests.get(unsplash_url, params=params, headers=headers)
+    r = httpx.get(unsplash_url, params=params, headers=headers)
 
     # check if request is good 
     if r.status_code == 200:
