@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 
 # define Image for metasearch hitting web APIs
 image = Image.debian_slim(python_version='3.10') \
-            .pip_install('openai', 'httpx', 'beautifulsoup4')
+            .pip_install('openai', 'httpx', 'beautifulsoup4', 'fastapi[standard]')
 app = App('chain-search', image=image)
 
 # use OpenAI to convert query into smaller queries
