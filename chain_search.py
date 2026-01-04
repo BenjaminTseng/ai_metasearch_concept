@@ -1,4 +1,4 @@
-from modal import Image, App, web_endpoint, Secret, Function
+from modal import Image, App, fastapi_endpoint, Secret, Function
 from fastapi.responses import HTMLResponse
 
 # define Image for metasearch hitting web APIs
@@ -363,7 +363,7 @@ def parse_response(response: str):
 
 # web endpoint
 @app.function()
-@web_endpoint(label='metasearch')
+@fastapi_endpoint(label='metasearch')
 def web_search(query: str = None):
     import random 
 
